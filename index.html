@@ -1,0 +1,2148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>POODLE RUN 3D - Petualangan Poodle Lari Tanpa Henti</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts: Fredoka & JetBrains Mono for Arcade Numbers -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+            background: #1e293b;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .arcade-num {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.45);
+        }
+
+        .btn-3d {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35), 0 8px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        .btn-3d:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 0 rgba(0, 0, 0, 0.35), 0 12px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-3d:active, .btn-3d.active-press {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        .swatch-btn {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .swatch-btn:hover {
+            transform: scale(1.15);
+        }
+
+        .swatch-btn.selected {
+            transform: scale(1.2);
+            box-shadow: 0 0 0 3px #ffffff, 0 0 15px rgba(251, 191, 36, 0.9);
+        }
+
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-7px); }
+        }
+
+        .animate-float {
+            animation: floatSlow 3s ease-in-out infinite;
+        }
+
+        @keyframes popScore {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(0.7); }
+            40% { opacity: 1; transform: translate(-50%, -28px) scale(1.15); }
+            100% { opacity: 0; transform: translate(-50%, -55px) scale(0.95); }
+        }
+
+        .score-popup {
+            position: absolute;
+            pointer-events: none;
+            font-weight: 800;
+            text-shadow: 0 3px 8px rgba(0,0,0,0.6);
+            animation: popScore 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            z-index: 30;
+        }
+
+        @keyframes rainbowPulse {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .rainbow-badge {
+            background: linear-gradient(90deg, #ec4899, #f59e0b, #10b981, #3b82f6, #8b5cf6);
+            animation: rainbowPulse 2s linear infinite;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- Three.js Canvas Mount -->
+    <div id="canvas-mount" class="w-full h-full"></div>
+
+    <!-- Floating Popups Container -->
+    <div id="popup-layer" class="absolute inset-0 pointer-events-none overflow-hidden z-20"></div>
+
+    <!-- TOP HUD -->
+    <header class="absolute top-0 left-0 right-0 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 z-30 pointer-events-none">
+        <!-- Left: Brand & Controls Quick Access -->
+        <div class="flex items-center gap-2 sm:gap-3 pointer-events-auto">
+            <div class="glass-panel px-3 py-2 rounded-2xl flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-pink-500 to-amber-400 flex items-center justify-center text-white shadow-md">
+                    <i class="fa-solid fa-dog text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-white text-sm sm:text-base tracking-wide">POODLE RUN</span>
+                        <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-amber-400 text-slate-900">3D</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px] text-slate-300">
+                        <span id="time-badge" class="flex items-center gap-1 text-amber-300 font-semibold">
+                            <i class="fa-solid fa-sun"></i> Siang
+                        </span>
+                        <span>•</span>
+                        <span id="speed-badge" class="text-emerald-300 font-semibold">1.0x</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Switch Button (All Rear 3D Perspectives) -->
+            <button id="btn-camera" class="glass-panel hover:bg-slate-800/80 text-white px-3 py-2.5 rounded-2xl flex items-center gap-2 text-xs sm:text-sm font-semibold btn-3d" title="Ganti Jarak Kamera Belakang (Tombol C)">
+                <i class="fa-solid fa-video text-cyan-400"></i>
+                <span id="camera-label" class="hidden md:inline">Belakang Standar</span>
+            </button>
+
+            <!-- Sound Mute Toggle -->
+            <button id="btn-sound" class="glass-panel hover:bg-slate-800/80 text-white w-10 h-10 rounded-2xl flex items-center justify-center text-sm btn-3d" title="Suara Aktif / Bisu (Tombol M)">
+                <i id="sound-icon" class="fa-solid fa-volume-high text-amber-400"></i>
+            </button>
+        </div>
+
+        <!-- Center: Color Selector Swatches on HUD -->
+        <div class="glass-panel px-3 py-2 rounded-2xl hidden lg:flex items-center gap-2.5 pointer-events-auto">
+            <span class="text-xs text-slate-300 font-semibold mr-1"><i class="fa-solid fa-palette text-pink-400 mr-1"></i>Warna Bulu:</span>
+            <button data-coat="white" class="swatch-btn selected w-6 h-6 rounded-full bg-slate-100 border-2 border-slate-300" title="Putih Klasik"></button>
+            <button data-coat="apricot" class="swatch-btn w-6 h-6 rounded-full bg-amber-500 border-2 border-amber-200" title="Emas Aprikot"></button>
+            <button data-coat="pink" class="swatch-btn w-6 h-6 rounded-full bg-pink-400 border-2 border-pink-200" title="Pink Permen"></button>
+            <button data-coat="black" class="swatch-btn w-6 h-6 rounded-full bg-slate-900 border-2 border-slate-500" title="Hitam Elegan"></button>
+            <button data-coat="cyber" class="swatch-btn w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-400 to-fuchsia-500 border-2 border-white" title="Neon Siber"></button>
+        </div>
+
+        <!-- Right: Score & High Score -->
+        <div class="glass-panel px-3.5 py-2 rounded-2xl flex items-center gap-4 pointer-events-auto">
+            <!-- Bones Counter -->
+            <div class="flex items-center gap-1.5 border-r border-slate-600/70 pr-3">
+                <i class="fa-solid fa-bone text-amber-400 text-sm animate-pulse"></i>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Tulang</div>
+                    <div id="hud-bones" class="arcade-num text-sm sm:text-base font-bold text-amber-300">0</div>
+                </div>
+            </div>
+            <!-- High Score -->
+            <div class="text-right">
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-end gap-1">
+                    <i class="fa-solid fa-trophy text-yellow-400"></i> Terbaik
+                </div>
+                <div id="hud-highscore" class="arcade-num text-sm sm:text-lg font-bold text-slate-300">00000</div>
+            </div>
+            <!-- Current Score -->
+            <div class="text-right">
+                <div class="text-[10px] uppercase tracking-wider text-cyan-300 font-semibold">Skor</div>
+                <div id="hud-score" class="arcade-num text-lg sm:text-2xl font-extrabold text-white tracking-wider">00000</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ACTIVE POWER-UP BANNER -->
+    <div id="powerup-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+        <div class="rainbow-badge px-4 py-1.5 rounded-full text-white font-extrabold text-xs sm:text-sm shadow-lg flex items-center gap-2 border border-white/50">
+            <i class="fa-solid fa-star animate-spin"></i>
+            <span>MODE SUPER POODLE AKTIF! TABRAK RINTANGAN!</span>
+            <span id="powerup-timer" class="arcade-num bg-black/30 px-2 py-0.5 rounded-full">6.0s</span>
+        </div>
+    </div>
+
+    <!-- START / MENU OVERLAY -->
+    <div id="start-modal" class="absolute inset-0 flex items-center justify-center p-4 z-40 bg-slate-950/45 backdrop-blur-sm">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-7 text-center text-white border-2 border-white/20 animate-float">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-pink-500/20 border border-pink-400/40 text-pink-300 text-xs font-bold mb-3">
+                <i class="fa-solid fa-paw"></i> 3D REAR CHASE RUNNER
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-pink-200 to-amber-300 bg-clip-text text-transparent mb-2">
+                POODLE RUN 3D
+            </h1>
+            <p class="text-slate-300 text-xs sm:text-sm mb-5">
+                Berlari dari sudut pandang belakang 3D! Pindah jalur kiri/kanan, lompati hidran & kaktus, tunduk di bawah gerbang neon, dan kumpulkan <span class="text-amber-300 font-semibold">Tulang Emas</span>!
+            </p>
+
+            <!-- Fur Selector inside Start Modal -->
+            <div class="bg-slate-900/70 rounded-2xl p-3.5 mb-5 border border-slate-700/70">
+                <div class="text-xs font-semibold text-slate-300 mb-2.5 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                    <span>Pilih Gaya Bulu Poodle Kamu:</span>
+                    <span id="coat-name-display" class="text-amber-300 font-bold">Putih Klasik</span>
+                </div>
+                <div class="flex items-center justify-center gap-3.5">
+                    <button data-coat="white" class="swatch-btn selected w-9 h-9 rounded-full bg-slate-100 border-2 border-slate-300" title="Putih Klasik"></button>
+                    <button data-coat="apricot" class="swatch-btn w-9 h-9 rounded-full bg-amber-500 border-2 border-amber-200" title="Emas Aprikot"></button>
+                    <button data-coat="pink" class="swatch-btn w-9 h-9 rounded-full bg-pink-400 border-2 border-pink-200" title="Pink Permen"></button>
+                    <button data-coat="black" class="swatch-btn w-9 h-9 rounded-full bg-slate-900 border-2 border-slate-500" title="Hitam Elegan"></button>
+                    <button data-coat="cyber" class="swatch-btn w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-400 to-fuchsia-500 border-2 border-white" title="Neon Siber"></button>
+                </div>
+            </div>
+
+            <!-- Controls Guide -->
+            <div class="grid grid-cols-3 gap-2 text-left mb-6 text-xs">
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60 flex flex-col items-center text-center gap-1.5">
+                    <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 font-bold">
+                        <i class="fa-solid fa-arrows-left-right"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-white text-[11px]">Pindah Jalur</div>
+                        <div class="text-slate-400 text-[10px]">A / D / Kiri-Kanan</div>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60 flex flex-col items-center text-center gap-1.5">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 font-bold">
+                        <i class="fa-solid fa-arrow-up"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-white text-[11px]">Lompat (2x)</div>
+                        <div class="text-slate-400 text-[10px]">Spasi / W / Atas</div>
+                    </div>
+                </div>
+                <div class="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60 flex flex-col items-center text-center gap-1.5">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 font-bold">
+                        <i class="fa-solid fa-arrow-down"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-white text-[11px]">Tunduk</div>
+                        <div class="text-slate-400 text-[10px]">S / Panah Bawah</div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-start" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-white font-extrabold text-base sm:text-lg tracking-wide btn-3d flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i> MULAI LARI SEKARANG!
+            </button>
+            <div class="text-[11px] text-slate-400 mt-3">
+                Tips: Gunakan tombol arah atau usap layar (Swipe) untuk berpindah 3 jalur!
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER MODAL -->
+    <div id="gameover-modal" class="hidden absolute inset-0 flex items-center justify-center p-4 z-40 bg-slate-950/60 backdrop-blur-sm">
+        <div class="glass-panel max-w-md w-full rounded-3xl p-6 sm:p-7 text-center text-white border-2 border-rose-500/40">
+            <div class="w-16 h-16 rounded-2xl bg-rose-500/20 border-2 border-rose-400/50 flex items-center justify-center mx-auto mb-3 text-rose-400 text-3xl">
+                <i class="fa-solid fa-face-dizzy"></i>
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-1">ADUH! TERTABRAK!</h2>
+            <p id="gameover-reason" class="text-slate-300 text-xs sm:text-sm mb-5">Poodle menabrak rintangan di taman.</p>
+
+            <!-- Score Summary Box -->
+            <div class="grid grid-cols-3 gap-2.5 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-700/80 mb-5">
+                <div>
+                    <div class="text-[10px] uppercase text-slate-400 font-bold">Skor Akhir</div>
+                    <div id="final-score" class="arcade-num text-lg sm:text-xl font-extrabold text-cyan-300">0</div>
+                </div>
+                <div class="border-x border-slate-700/80">
+                    <div class="text-[10px] uppercase text-slate-400 font-bold">Tulang Emas</div>
+                    <div id="final-bones" class="arcade-num text-lg sm:text-xl font-extrabold text-amber-300">0</div>
+                </div>
+                <div>
+                    <div class="text-[10px] uppercase text-slate-400 font-bold">Rekor</div>
+                    <div id="final-best" class="arcade-num text-lg sm:text-xl font-extrabold text-emerald-300">0</div>
+                </div>
+            </div>
+
+            <!-- New Record Badge -->
+            <div id="new-record-badge" class="hidden mb-4 py-1.5 px-3 rounded-xl bg-amber-400/20 border border-amber-400/50 text-amber-300 text-xs font-bold">
+                <i class="fa-solid fa-crown mr-1"></i> REKOR TERTINGGI BARU! HEBAT!
+            </div>
+
+            <button id="btn-restart" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white font-extrabold text-base sm:text-lg tracking-wide btn-3d flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> MAIN LAGI (SPASI)
+            </button>
+        </div>
+    </div>
+
+    <!-- BOTTOM ACTION CONTROLS (3-Lane Left/Right + Jump/Duck for Mobile & Desktop) -->
+    <div class="absolute bottom-4 left-0 right-0 px-3 sm:px-6 flex items-end justify-between pointer-events-none z-30">
+        <!-- Left Cluster: Lane Left & Right -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-left" class="glass-panel active:bg-cyan-500/40 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-2xl font-extrabold flex flex-col items-center justify-center btn-3d border-b-4 border-cyan-500/60" title="Jalur Kiri (A / Panah Kiri)">
+                <i class="fa-solid fa-caret-left text-cyan-400 text-2xl leading-none"></i>
+                <span class="text-[10px] tracking-wider mt-0.5">KIRI</span>
+            </button>
+            <button id="btn-right" class="glass-panel active:bg-cyan-500/40 text-white w-14 h-14 sm:w-16 sm:h-16 rounded-2xl font-extrabold flex flex-col items-center justify-center btn-3d border-b-4 border-cyan-500/60" title="Jalur Kanan (D / Panah Kanan)">
+                <i class="fa-solid fa-caret-right text-cyan-400 text-2xl leading-none"></i>
+                <span class="text-[10px] tracking-wider mt-0.5">KANAN</span>
+            </button>
+        </div>
+
+        <!-- Center Hint on Desktop -->
+        <div class="hidden lg:flex items-center gap-2 glass-panel px-4 py-2 rounded-full text-xs text-slate-300 pointer-events-auto">
+            <i class="fa-solid fa-gamepad text-cyan-400"></i>
+            <span><kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-white font-mono">A</kbd>/<kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-white font-mono">D</kbd> Pindah Jalur • <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-white font-mono">Spasi</kbd> Lompat • <kbd class="px-1.5 py-0.5 bg-slate-700 rounded text-white font-mono">S</kbd> Tunduk</span>
+        </div>
+
+        <!-- Right Cluster: Duck & Jump -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-duck" class="glass-panel active:bg-amber-500/40 text-white px-4 h-14 sm:px-5 sm:h-16 rounded-2xl font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center btn-3d border-b-4 border-amber-500/60" title="Tunduk / Tukik (S / Panah Bawah)">
+                <i class="fa-solid fa-angles-down text-amber-400 text-lg"></i>
+                <span class="text-[10px] tracking-wider mt-0.5">TUNDUK</span>
+            </button>
+            <button id="btn-jump" class="glass-panel active:bg-emerald-500/40 text-white px-5 h-14 sm:px-6 sm:h-16 rounded-2xl font-extrabold text-xs sm:text-sm flex flex-col items-center justify-center btn-3d border-b-4 border-emerald-500/60" title="Lompat / Lompat Ganda (Spasi / Panah Atas)">
+                <i class="fa-solid fa-angles-up text-emerald-400 text-lg"></i>
+                <span class="text-[10px] tracking-wider mt-0.5">LOMPAT</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * ============================================================================
+ * POODLE RUN 3D - THIRD-PERSON REAR CHASE 3D ENDLESS RUNNER
+ * ============================================================================
+ */
+
+const LANES = [-2.6, 0, 2.6]; // 3 Running Lanes (Left, Center, Right)
+
+// ----------------------------------------------------------------------------
+// 1. PROCEDURAL SOUND ENGINE (WEB AUDIO API)
+// ----------------------------------------------------------------------------
+class SoundManager {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) {
+                this.ctx = new AudioCtx();
+            }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        return this.muted;
+    }
+
+    // Play lane switch swoosh
+    playLaneSwitch() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(240, now);
+        osc.frequency.exponentialRampToValueAtTime(380, now + 0.08);
+
+        gain.gain.setValueAtTime(0.11, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.095);
+    }
+
+    // Play a cheerful Poodle bark + jump boing
+    playJump(isDouble = false) {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = isDouble ? 'triangle' : 'sine';
+        const baseFreq = isDouble ? 420 : 300;
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.9, now + 0.14);
+
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.17);
+    }
+
+    // Play duck / fast-fall swoosh
+    playDuck() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.1);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+    }
+
+    // Play golden bone pickup chime
+    playBoneCollect() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [587.33, 880, 1174.66]; // D5, A5, D6
+        notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.055;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.19);
+        });
+    }
+
+    // Play Super Treat power-up fanfare
+    playPowerup() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 E5 G5 C6
+        notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.07;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(freq, now);
+
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.24);
+        });
+    }
+
+    // Play Chrome Dino classic 100-pt milestone beep
+    playMilestone() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const freqs = [659.25, 987.77]; // E5 -> B5
+        freqs.forEach((f, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(f, now + i * 0.09);
+
+            gain.gain.setValueAtTime(0.09, now + i * 0.09);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.14);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i * 0.09);
+            osc.stop(now + i * 0.09 + 0.15);
+        });
+    }
+
+    // Play smash sound when invincible Poodle destroys an obstacle
+    playSmash() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(190, now);
+        osc.frequency.exponentialRampToValueAtTime(480, now + 0.12);
+
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+    }
+
+    // Play retro game over melody
+    playGameOver() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const notes = [392.00, 349.23, 329.63, 261.63]; // G4, F4, E4, C4
+        notes.forEach((freq, idx) => {
+            const now = this.ctx.currentTime + idx * 0.14;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, now);
+
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.24);
+        });
+    }
+}
+
+const sound = new SoundManager();
+
+// ----------------------------------------------------------------------------
+// 2. POODLE COAT PRESETS & ENVIRONMENT PALETTES
+// ----------------------------------------------------------------------------
+const COAT_PRESETS = {
+    white: {
+        name: 'Putih Klasik',
+        fluff: 0xf8fafc,
+        body: 0xe2e8f0,
+        collar: 0xef4444,
+        emissive: 0x000000
+    },
+    apricot: {
+        name: 'Emas Aprikot',
+        fluff: 0xf59e0b,
+        body: 0xd97706,
+        collar: 0x10b981,
+        emissive: 0x000000
+    },
+    pink: {
+        name: 'Pink Permen',
+        fluff: 0xf472b6,
+        body: 0xec4899,
+        collar: 0x3b82f6,
+        emissive: 0x000000
+    },
+    black: {
+        name: 'Hitam Elegan',
+        fluff: 0x334155,
+        body: 0x1e293b,
+        collar: 0xfbbf24,
+        emissive: 0x000000
+    },
+    cyber: {
+        name: 'Neon Siber',
+        fluff: 0x22d3ee,
+        body: 0xa855f7,
+        collar: 0xf43f5e,
+        emissive: 0x083344
+    }
+};
+
+const TIME_THEMES = [
+    {
+        name: 'Siang',
+        icon: 'fa-sun',
+        colorClass: 'text-amber-300',
+        skyHex: 0x38bdf8,
+        fogHex: 0xbae6fd,
+        ambientHex: 0xffffff,
+        ambientIntensity: 0.75,
+        dirHex: 0xfffbeb,
+        dirIntensity: 0.95,
+        groundHex: 0x4ade80,
+        roadHex: 0x334155,
+        starOpacity: 0.0
+    },
+    {
+        name: 'Senja',
+        icon: 'fa-cloud-sun',
+        colorClass: 'text-orange-300',
+        skyHex: 0xfb7185,
+        fogHex: 0xfda4af,
+        ambientHex: 0xfed7aa,
+        ambientIntensity: 0.68,
+        dirHex: 0xf97316,
+        dirIntensity: 0.9,
+        groundHex: 0x22c55e,
+        roadHex: 0x1e293b,
+        starOpacity: 0.35
+    },
+    {
+        name: 'Malam',
+        icon: 'fa-moon',
+        colorClass: 'text-indigo-300',
+        skyHex: 0x0f172a,
+        fogHex: 0x1e1b4b,
+        ambientHex: 0x818cf8,
+        ambientIntensity: 0.58,
+        dirHex: 0xc7d2fe,
+        dirIntensity: 0.7,
+        groundHex: 0x14532d,
+        roadHex: 0x0f172a,
+        starOpacity: 1.0
+    }
+];
+
+// ----------------------------------------------------------------------------
+// 3. 3D POODLE CHARACTER BUILDER & ANIMATOR (FACING -Z FORWARD)
+// ----------------------------------------------------------------------------
+class PoodleCharacter {
+    constructor(scene) {
+        this.scene = scene;
+        this.group = new THREE.Group();
+        this.group.position.set(0, 0, 0);
+
+        // Lane & Horizontal Movement
+        this.currentLane = 1; // 0 = Left, 1 = Center, 2 = Right
+        this.x = LANES[this.currentLane];
+        this.laneRoll = 0;
+
+        // Vertical Physics & State
+        this.y = 0;
+        this.vy = 0;
+        this.gravity = -54;
+        this.jumpStrength = 20.5;
+        this.jumpCount = 0;
+        this.maxJumps = 2;
+        this.isDucking = false;
+        this.runCycle = 0;
+        this.spinAngle = 0;
+
+        // Shared Materials
+        this.fluffMat = new THREE.MeshStandardMaterial({
+            color: COAT_PRESETS.white.fluff,
+            roughness: 0.72,
+            metalness: 0.05
+        });
+        this.bodyMat = new THREE.MeshStandardMaterial({
+            color: COAT_PRESETS.white.body,
+            roughness: 0.62,
+            metalness: 0.05
+        });
+        this.collarMat = new THREE.MeshStandardMaterial({
+            color: COAT_PRESETS.white.collar,
+            roughness: 0.3,
+            metalness: 0.4,
+            emissive: 0x220000
+        });
+        this.darkMat = new THREE.MeshStandardMaterial({
+            color: 0x111827,
+            roughness: 0.2
+        });
+        this.whiteEyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        this.tongueMat = new THREE.MeshStandardMaterial({ color: 0xfb7185, roughness: 0.4 });
+        this.goldMat = new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            metalness: 0.85,
+            roughness: 0.2,
+            emissive: 0x451a03
+        });
+
+        this.buildModel();
+        this.buildGroundShadow();
+        this.scene.add(this.group);
+    }
+
+    buildModel() {
+        // Inner mesh container rotated +90 deg around Y so local +X faces World -Z (Forward away from camera!)
+        this.orientGroup = new THREE.Group();
+        this.orientGroup.rotation.y = Math.PI / 2;
+        this.group.add(this.orientGroup);
+
+        this.bodyPivot = new THREE.Group();
+        this.bodyPivot.position.y = 1.15;
+        this.orientGroup.add(this.bodyPivot);
+
+        // 1. Sleek Hindquarters / Torso
+        const torsoGeo = new THREE.CylinderGeometry(0.38, 0.44, 1.38, 14);
+        torsoGeo.rotateZ(Math.PI / 2);
+        const torso = new THREE.Mesh(torsoGeo, this.bodyMat);
+        torso.castShadow = true;
+        torso.receiveShadow = true;
+        this.bodyPivot.add(torso);
+
+        // Cute Poodle Hip Rosettes (Visible from behind!)
+        [-0.34, 0.34].forEach((zOff) => {
+            const hipPuff = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), this.fluffMat);
+            hipPuff.position.set(-0.38, 0.16, zOff);
+            hipPuff.castShadow = true;
+            this.bodyPivot.add(hipPuff);
+        });
+
+        // 2. Fluffy Poodle Lion-Cut Chest Mane
+        this.chestGroup = new THREE.Group();
+        this.chestGroup.position.set(0.45, 0.08, 0);
+        this.bodyPivot.add(this.chestGroup);
+
+        const mainChest = new THREE.Mesh(new THREE.SphereGeometry(0.66, 16, 16), this.fluffMat);
+        mainChest.scale.set(1.1, 1.02, 1.12);
+        mainChest.castShadow = true;
+        this.chestGroup.add(mainChest);
+
+        const puffOffsets = [
+            [0.25, 0.25, 0.36, 0.34],
+            [0.25, 0.25, -0.36, 0.34],
+            [0.32, -0.18, 0.28, 0.32],
+            [0.32, -0.18, -0.28, 0.32],
+            [-0.2, 0.32, 0, 0.38]
+        ];
+        puffOffsets.forEach(([x, y, z, r]) => {
+            const p = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 12), this.fluffMat);
+            p.position.set(x, y, z);
+            p.castShadow = true;
+            this.chestGroup.add(p);
+        });
+
+        // 3. Stylish Collar & Golden Tag
+        const collarGeo = new THREE.TorusGeometry(0.46, 0.09, 10, 24);
+        collarGeo.rotateY(Math.PI / 2);
+        collarGeo.rotateZ(-0.35);
+        const collar = new THREE.Mesh(collarGeo, this.collarMat);
+        collar.position.set(0.76, 0.46, 0);
+        this.bodyPivot.add(collar);
+
+        const bell = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), this.goldMat);
+        bell.position.set(1.15, 0.24, 0);
+        this.bodyPivot.add(bell);
+
+        // 4. Head & Neck Group
+        this.headGroup = new THREE.Group();
+        this.headGroup.position.set(0.88, 0.80, 0);
+        this.bodyPivot.add(this.headGroup);
+
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.46, 16, 16), this.bodyMat);
+        skull.castShadow = true;
+        this.headGroup.add(skull);
+
+        // Iconic Poodle Topknot (Pom-pom Crown on top of head - very visible from behind!)
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 16), this.fluffMat);
+        crown.position.set(-0.04, 0.42, 0);
+        crown.scale.set(1.12, 0.98, 1.2);
+        crown.castShadow = true;
+        this.headGroup.add(crown);
+
+        // Cute Bow Ribbon behind the Topknot
+        const bowL = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.26, 8), this.collarMat);
+        bowL.rotation.x = Math.PI / 2;
+        bowL.position.set(-0.36, 0.34, 0.14);
+        this.headGroup.add(bowL);
+
+        const bowR = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.26, 8), this.collarMat);
+        bowR.rotation.x = -Math.PI / 2;
+        bowR.position.set(-0.36, 0.34, -0.14);
+        this.headGroup.add(bowR);
+
+        // Snout (Muzzle)
+        const snoutGeo = new THREE.CylinderGeometry(0.14, 0.24, 0.58, 12);
+        snoutGeo.rotateZ(Math.PI / 2);
+        const snout = new THREE.Mesh(snoutGeo, this.bodyMat);
+        snout.position.set(0.45, -0.05, 0);
+        snout.castShadow = true;
+        this.headGroup.add(snout);
+
+        const nose = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), this.darkMat);
+        nose.position.set(0.75, 0.02, 0);
+        this.headGroup.add(nose);
+
+        const tongue = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.14), this.tongueMat);
+        tongue.position.set(0.56, -0.2, 0);
+        tongue.rotation.z = -0.25;
+        this.headGroup.add(tongue);
+
+        [-0.22, 0.22].forEach((zPos) => {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 12), this.darkMat);
+            eye.position.set(0.33, 0.14, zPos);
+            this.headGroup.add(eye);
+
+            const glint = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), this.whiteEyeMat);
+            glint.position.set(0.39, 0.17, zPos + (zPos > 0 ? 0.02 : -0.02));
+            this.headGroup.add(glint);
+        });
+
+        // Floppy Fluffy Ears (Sticking out on Left & Right so they bounce visibly from behind!)
+        this.leftEar = this.createEar(1);
+        this.rightEar = this.createEar(-1);
+        this.headGroup.add(this.leftEar);
+        this.headGroup.add(this.rightEar);
+
+        // 5. Wagging Tail with Big Pom-Pom (Star of the Rear View!)
+        this.tailPivot = new THREE.Group();
+        this.tailPivot.position.set(-0.68, 0.30, 0);
+        this.bodyPivot.add(this.tailPivot);
+
+        const tailStem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.48, 8), this.bodyMat);
+        tailStem.position.set(-0.15, 0.20, 0);
+        tailStem.rotation.z = 0.62;
+        this.tailPivot.add(tailStem);
+
+        const tailPom = new THREE.Mesh(new THREE.SphereGeometry(0.34, 16, 16), this.fluffMat);
+        tailPom.position.set(-0.32, 0.44, 0);
+        tailPom.castShadow = true;
+        this.tailPivot.add(tailPom);
+
+        // 6. Four Legs with Poodle Ankle Pom-Poms
+        this.legFL = this.createLeg(0.52, -0.15, 0.32);
+        this.legFR = this.createLeg(0.52, -0.15, -0.32);
+        this.legBL = this.createLeg(-0.48, -0.15, 0.32);
+        this.legBR = this.createLeg(-0.48, -0.15, -0.32);
+
+        this.bodyPivot.add(this.legFL, this.legFR, this.legBL, this.legBR);
+    }
+
+    buildGroundShadow() {
+        // High-contrast ground target ring directly under the Poodle for 3D depth perception
+        const shadowGeo = new THREE.RingGeometry(0.15, 0.85, 24);
+        shadowGeo.rotateX(-Math.PI / 2);
+        this.shadowRingMat = new THREE.MeshBasicMaterial({
+            color: 0x0f172a,
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide
+        });
+        this.shadowRing = new THREE.Mesh(shadowGeo, this.shadowRingMat);
+        this.shadowRing.position.set(0, 0.03, 0);
+        this.scene.add(this.shadowRing);
+    }
+
+    createEar(side) {
+        const earPivot = new THREE.Group();
+        earPivot.position.set(-0.02, 0.14, side * 0.42);
+
+        const earUpper = new THREE.Mesh(new THREE.SphereGeometry(0.21, 12, 12), this.fluffMat);
+        earUpper.scale.set(0.85, 1.65, 0.75);
+        earUpper.position.set(0, -0.22, side * 0.12);
+        earUpper.castShadow = true;
+        earPivot.add(earUpper);
+
+        const earTipPom = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), this.fluffMat);
+        earTipPom.position.set(0, -0.48, side * 0.18);
+        earTipPom.castShadow = true;
+        earPivot.add(earTipPom);
+
+        return earPivot;
+    }
+
+    createLeg(x, y, z) {
+        const legPivot = new THREE.Group();
+        legPivot.position.set(x, y, z);
+
+        const upperLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.08, 0.75, 10), this.bodyMat);
+        upperLeg.position.y = -0.35;
+        upperLeg.castShadow = true;
+        legPivot.add(upperLeg);
+
+        const anklePuff = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), this.fluffMat);
+        anklePuff.position.y = -0.66;
+        anklePuff.castShadow = true;
+        legPivot.add(anklePuff);
+
+        const paw = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), this.bodyMat);
+        paw.scale.set(1.3, 0.7, 1.0);
+        paw.position.set(0.06, -0.84, 0);
+        legPivot.add(paw);
+
+        return legPivot;
+    }
+
+    setCoatColor(coatKey) {
+        const preset = COAT_PRESETS[coatKey] || COAT_PRESETS.white;
+        this.fluffMat.color.setHex(preset.fluff);
+        this.bodyMat.color.setHex(preset.body);
+        this.collarMat.color.setHex(preset.collar);
+        this.fluffMat.emissive.setHex(preset.emissive);
+    }
+
+    changeLane(dir) {
+        const nextLane = THREE.MathUtils.clamp(this.currentLane + dir, 0, 2);
+        if (nextLane !== this.currentLane) {
+            this.currentLane = nextLane;
+            this.laneRoll = -dir * 0.35; // Bank into the turn
+            sound.playLaneSwitch();
+            return true;
+        }
+        return false;
+    }
+
+    jump() {
+        if (this.jumpCount < this.maxJumps) {
+            const isDouble = this.jumpCount === 1;
+            this.vy = isDouble ? this.jumpStrength * 0.94 : this.jumpStrength;
+            this.jumpCount++;
+            this.isDucking = false;
+            if (isDouble) {
+                this.spinAngle = Math.PI * 2;
+            }
+            sound.playJump(isDouble);
+            return { jumped: true, isDouble };
+        }
+        return { jumped: false, isDouble: false };
+    }
+
+    setDuck(state) {
+        if (state && !this.isDucking) {
+            sound.playDuck();
+        }
+        this.isDucking = state;
+        if (this.isDucking && this.y > 0.05 && this.vy > -24) {
+            this.vy = -28; // Fast-fall dive
+        }
+    }
+
+    reset() {
+        this.currentLane = 1;
+        this.x = LANES[1];
+        this.laneRoll = 0;
+        this.y = 0;
+        this.vy = 0;
+        this.jumpCount = 0;
+        this.isDucking = false;
+        this.spinAngle = 0;
+        this.group.position.set(0, 0, 0);
+        this.group.rotation.set(0, 0, 0);
+        this.bodyPivot.rotation.set(0, 0, 0);
+        this.bodyPivot.scale.set(1, 1, 1);
+        this.shadowRing.position.set(0, 0.03, 0);
+    }
+
+    update(dt, gameSpeed, isInvincible, totalTime) {
+        // Rainbow shimmer when invincible
+        if (isInvincible) {
+            const hue = (totalTime * 1.5) % 1;
+            this.fluffMat.emissive.setHSL(hue, 0.85, 0.35);
+            this.bodyMat.emissive.setHSL((hue + 0.2) % 1, 0.85, 0.25);
+        } else {
+            this.bodyMat.emissive.setHex(0x000000);
+        }
+
+        // Smooth Horizontal Lane Interpolation
+        const targetX = LANES[this.currentLane];
+        this.x = THREE.MathUtils.lerp(this.x, targetX, dt * 15);
+        this.laneRoll = THREE.MathUtils.lerp(this.laneRoll, (this.x - targetX) * 0.18, dt * 14);
+
+        // Vertical Jump Physics
+        const wasAirborne = this.y > 0.01;
+        this.vy += this.gravity * dt;
+        this.y += this.vy * dt;
+
+        let justLanded = false;
+        if (this.y <= 0) {
+            if (wasAirborne) justLanded = true;
+            this.y = 0;
+            this.vy = 0;
+            this.jumpCount = 0;
+        }
+
+        this.group.position.set(this.x, this.y, 0);
+        this.group.rotation.z = this.laneRoll;
+
+        // Update Ground Shadow Ring under the Poodle
+        this.shadowRing.position.x = this.x;
+        const shadowScale = Math.max(0.45, 1.0 - this.y * 0.12);
+        this.shadowRing.scale.setScalar(shadowScale);
+        this.shadowRingMat.opacity = Math.max(0.15, 0.45 - this.y * 0.06);
+
+        // Running Animation Cycle
+        this.runCycle += dt * (gameSpeed * 0.88);
+
+        if (this.y > 0.05) {
+            // Airborne Pose
+            const pitch = THREE.MathUtils.clamp(this.vy * 0.022, -0.38, 0.42);
+            this.bodyPivot.rotation.z = pitch;
+
+            if (this.spinAngle > 0) {
+                this.spinAngle = Math.max(0, this.spinAngle - dt * 14);
+                this.orientGroup.rotation.y = Math.PI / 2 + this.spinAngle;
+            } else {
+                this.orientGroup.rotation.y = Math.PI / 2;
+            }
+
+            this.legFL.rotation.z = 0.55;
+            this.legFR.rotation.z = 0.40;
+            this.legBL.rotation.z = -0.55;
+            this.legBR.rotation.z = -0.45;
+
+            this.leftEar.rotation.x = 0.55;
+            this.rightEar.rotation.x = -0.55;
+        } else {
+            this.spinAngle = 0;
+            this.orientGroup.rotation.y = Math.PI / 2;
+
+            const strideFreq = this.isDucking ? 1.4 : 1.0;
+            const s = Math.sin(this.runCycle * strideFreq);
+            const c = Math.cos(this.runCycle * strideFreq);
+
+            this.legFL.rotation.z = s * 0.78;
+            this.legBR.rotation.z = s * 0.78;
+            this.legFR.rotation.z = -s * 0.78;
+            this.legBL.rotation.z = -s * 0.78;
+
+            this.bodyPivot.rotation.z = c * 0.06;
+
+            // Floppy ears flare out left/right and bounce visibly from behind!
+            this.leftEar.rotation.x = 0.25 + Math.abs(c) * 0.28;
+            this.rightEar.rotation.x = -0.25 - Math.abs(c) * 0.28;
+        }
+
+        // Ducking / Sliding Transformation
+        const targetScaleY = this.isDucking ? 0.52 : 1.0;
+        const targetScaleX = this.isDucking ? 1.25 : 1.0;
+        const targetPivotY = this.isDucking ? 0.62 : 1.15 + Math.abs(Math.sin(this.runCycle)) * (this.y > 0 ? 0 : 0.12);
+        const targetHeadY = this.isDucking ? 0.38 : 0.80;
+
+        this.bodyPivot.scale.y = THREE.MathUtils.lerp(this.bodyPivot.scale.y, targetScaleY, dt * 16);
+        this.bodyPivot.scale.x = THREE.MathUtils.lerp(this.bodyPivot.scale.x, targetScaleX, dt * 16);
+        this.bodyPivot.position.y = THREE.MathUtils.lerp(this.bodyPivot.position.y, targetPivotY, dt * 18);
+        this.headGroup.position.y = THREE.MathUtils.lerp(this.headGroup.position.y, targetHeadY, dt * 16);
+
+        // Energetic Side-to-Side Tail Wag (Clearly visible in Rear Chase View!)
+        this.tailPivot.rotation.x = Math.sin(totalTime * 20) * 0.48;
+        this.tailPivot.rotation.z = Math.cos(totalTime * 10) * 0.15;
+
+        return { justLanded };
+    }
+
+    getHitbox() {
+        const height = this.isDucking ? 1.05 : 2.1;
+        return {
+            x: this.x,
+            halfWidth: 0.55,
+            minY: this.y + 0.1,
+            maxY: this.y + height,
+            minZ: -0.75,
+            maxZ: 0.75
+        };
+    }
+}
+
+// ----------------------------------------------------------------------------
+// 4. 3D REAR-VIEW WORLD, OBSTACLE & COLLECTIBLE MANAGER (ALONG Z-AXIS)
+// ----------------------------------------------------------------------------
+class WorldSpawner {
+    constructor(scene) {
+        this.scene = scene;
+        this.obstacles = [];
+        this.collectibles = [];
+        this.particles = [];
+        this.scenery = [];
+        this.laneDashes = [];
+        this.clouds = [];
+
+        this.spawnTimer = 0.8;
+        this.initMaterials();
+        this.initEnvironmentScenery();
+    }
+
+    initMaterials() {
+        this.hydrantRed = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.35, metalness: 0.2 });
+        this.silverMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.25, metalness: 0.7 });
+        this.cactusMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.65 });
+        this.flowerMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0x881337, roughness: 0.4 });
+        this.woodMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.65 });
+        this.ironMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.6 });
+        this.coneOrange = new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0x431407, roughness: 0.4 });
+        this.frisbeeNeon = new THREE.MeshStandardMaterial({
+            color: 0x06b6d4,
+            emissive: 0x0891b2,
+            roughness: 0.2,
+            metalness: 0.5
+        });
+        this.gateBeamMat = new THREE.MeshStandardMaterial({
+            color: 0xf43f5e,
+            emissive: 0xbe123c,
+            roughness: 0.25
+        });
+        this.boneGoldMat = new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            emissive: 0x78350f,
+            metalness: 0.75,
+            roughness: 0.2
+        });
+        this.superTreatMat = new THREE.MeshStandardMaterial({
+            color: 0xec4899,
+            emissive: 0xbe185d,
+            metalness: 0.6,
+            roughness: 0.15
+        });
+        this.shadowPlateMat = new THREE.MeshBasicMaterial({
+            color: 0x090d16,
+            transparent: true,
+            opacity: 0.42
+        });
+    }
+
+    initEnvironmentScenery() {
+        // 1. Two Lane Divider Dashed Lines running down Z-axis (at X = -1.3 and X = +1.3)
+        const dashGeo = new THREE.BoxGeometry(0.18, 0.03, 2.6);
+        const dashMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+
+        [-1.3, 1.3].forEach((xDivider) => {
+            for (let i = 0; i < 28; i++) {
+                const dash = new THREE.Mesh(dashGeo, dashMat);
+                dash.position.set(xDivider, 0.015, 12 - i * 6.5);
+                this.scene.add(dash);
+                this.laneDashes.push(dash);
+            }
+        });
+
+        // 2. Side Curbs & Colorful Park Trees / Street Lamps on Left & Right of the 3-Lane Road
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+        const leafMat1 = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 });
+        const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7 });
+        const lampGlowMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+        for (let i = 0; i < 32; i++) {
+            const side = i % 2 === 0 ? -1 : 1;
+            const treeGroup = new THREE.Group();
+            const xPos = side * (6.2 + Math.random() * 7.5);
+            const zPos = 10 - i * 5.8;
+
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 1.5, 7), trunkMat);
+            trunk.position.y = 0.75;
+            trunk.castShadow = true;
+            treeGroup.add(trunk);
+
+            const foliage = new THREE.Mesh(
+                new THREE.ConeGeometry(1.25, 2.9, 7),
+                Math.random() > 0.5 ? leafMat1 : leafMat2
+            );
+            foliage.position.y = 2.5;
+            foliage.castShadow = true;
+            treeGroup.add(foliage);
+
+            const scale = 0.85 + Math.random() * 0.7;
+            treeGroup.scale.set(scale, scale, scale);
+            treeGroup.position.set(xPos, 0, zPos);
+
+            this.scene.add(treeGroup);
+            this.scenery.push({ mesh: treeGroup, speedFactor: 1.0, wrapZ: 185 });
+        }
+
+        // Park Lamps right along the boulevard edges (X = -4.8 and X = +4.8)
+        for (let i = 0; i < 14; i++) {
+            const side = i % 2 === 0 ? -1 : 1;
+            const lampGroup = new THREE.Group();
+            const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 4.2, 8), this.ironMat);
+            pole.position.y = 2.1;
+            lampGroup.add(pole);
+
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), lampGlowMat);
+            bulb.position.y = 4.3;
+            lampGroup.add(bulb);
+
+            lampGroup.position.set(side * 4.9, 0, 10 - i * 13);
+            this.scene.add(lampGroup);
+            this.scenery.push({ mesh: lampGroup, speedFactor: 1.0, wrapZ: 182 });
+        }
+
+        // 3. Fluffy 3D Clouds high above the track
+        const cloudMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            roughness: 0.9,
+            transparent: true,
+            opacity: 0.9
+        });
+        for (let i = 0; i < 12; i++) {
+            const cloud = new THREE.Group();
+            for (let j = 0; j < 3; j++) {
+                const puff = new THREE.Mesh(new THREE.SphereGeometry(1.2 + Math.random() * 0.6, 10, 10), cloudMat);
+                puff.position.set(j * 1.1 - 1.1, Math.random() * 0.3, Math.random() * 0.3);
+                cloud.add(puff);
+            }
+            cloud.position.set((Math.random() - 0.5) * 45, 11 + Math.random() * 6, -10 - i * 15);
+            this.scene.add(cloud);
+            this.clouds.push(cloud);
+        }
+    }
+
+    addShadowBase(group, width = 1.6, depth = 1.4) {
+        const plateGeo = new THREE.PlaneGeometry(width, depth);
+        plateGeo.rotateX(-Math.PI / 2);
+        const plate = new THREE.Mesh(plateGeo, this.shadowPlateMat);
+        plate.position.y = 0.02;
+        group.add(plate);
+    }
+
+    // 1. 3D Fire Hydrant (Jumpable Ground Obstacle)
+    createHydrant() {
+        const group = new THREE.Group();
+        this.addShadowBase(group, 1.5, 1.5);
+
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 1.55, 12), this.hydrantRed);
+        body.position.y = 0.77;
+        body.castShadow = true;
+        group.add(body);
+
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(0.46, 12, 12), this.hydrantRed);
+        dome.position.y = 1.55;
+        group.add(dome);
+
+        const nozzleGeo = new THREE.CylinderGeometry(0.16, 0.16, 1.25, 10);
+        nozzleGeo.rotateZ(Math.PI / 2);
+        const nozzle = new THREE.Mesh(nozzleGeo, this.silverMat);
+        nozzle.position.y = 1.15;
+        group.add(nozzle);
+
+        return {
+            mesh: group,
+            type: 'ground',
+            label: 'Hidran Merah',
+            minY: 0,
+            maxY: 1.95
+        };
+    }
+
+    // 2. 3D Desert Cactus (Classic Chrome Dino Tribute - Jumpable)
+    createCactus() {
+        const group = new THREE.Group();
+        this.addShadowBase(group, 1.8, 1.4);
+
+        const mainStem = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.44, 2.2, 10), this.cactusMat);
+        mainStem.position.y = 1.1;
+        mainStem.castShadow = true;
+        group.add(mainStem);
+
+        const topDome = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 10), this.cactusMat);
+        topDome.position.y = 2.2;
+        group.add(topDome);
+
+        const flower = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), this.flowerMat);
+        flower.position.y = 2.52;
+        group.add(flower);
+
+        [-1, 1].forEach((dir, idx) => {
+            const armH = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.65, 8), this.cactusMat);
+            armH.rotation.z = Math.PI / 2;
+            armH.position.set(dir * 0.44, 1.05 + idx * 0.3, 0);
+            group.add(armH);
+
+            const armV = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.72, 8), this.cactusMat);
+            armV.position.set(dir * 0.72, 1.38 + idx * 0.3, 0);
+            group.add(armV);
+        });
+
+        return {
+            mesh: group,
+            type: 'ground',
+            label: 'Kaktus Berduri',
+            minY: 0,
+            maxY: 2.35
+        };
+    }
+
+    // 3. 3D Park Bench / Hurdle Facing the Player across the Lane (Jumpable)
+    createBench() {
+        const group = new THREE.Group();
+        this.addShadowBase(group, 2.2, 1.3);
+
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.18, 0.9), this.woodMat);
+        seat.position.y = 0.82;
+        seat.castShadow = true;
+        group.add(seat);
+
+        const backrest = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.68, 0.16), this.woodMat);
+        backrest.position.set(0, 1.32, -0.35);
+        backrest.castShadow = true;
+        group.add(backrest);
+
+        [-0.85, 0.85].forEach((x) => {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.85, 0.85), this.ironMat);
+            leg.position.set(x, 0.42, 0);
+            group.add(leg);
+        });
+
+        return {
+            mesh: group,
+            type: 'ground',
+            label: 'Bangku Taman',
+            minY: 0,
+            maxY: 1.65
+        };
+    }
+
+    // 4. Overhead Neon Barrier Gate / Hovering Frisbee (Requires Ducking underneath!)
+    createOverheadGate() {
+        const group = new THREE.Group();
+        this.addShadowBase(group, 2.2, 1.2);
+
+        // Side Pillars
+        [-0.98, 0.98].forEach((x) => {
+            const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 3.0, 8), this.ironMat);
+            pillar.position.set(x, 1.5, 0);
+            group.add(pillar);
+        });
+
+        // Glowing Overhead Crossbar at Head Height (Standing Poodle hits it, Ducking Poodle slides right under!)
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.15, 0.45), this.gateBeamMat);
+        beam.position.y = 2.15;
+        beam.castShadow = true;
+        group.add(beam);
+
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.22, 0.48), this.silverMat);
+        stripe.position.y = 2.15;
+        group.add(stripe);
+
+        return {
+            mesh: group,
+            type: 'aerial',
+            label: 'Palang Gerbang Atas',
+            minY: 1.42,
+            maxY: 3.1
+        };
+    }
+
+    // 5. Spinning Aerial Frisbee Disc (Requires Ducking or Lane Dodge)
+    createAerialFrisbee() {
+        const group = new THREE.Group();
+        this.addShadowBase(group, 1.9, 1.9);
+
+        const discGroup = new THREE.Group();
+        discGroup.position.y = 1.92;
+        discGroup.name = 'spinner';
+
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 1.08, 0.22, 20), this.frisbeeNeon);
+        disc.castShadow = true;
+        discGroup.add(disc);
+
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.08, 8, 20), this.silverMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.1;
+        discGroup.add(ring);
+
+        group.add(discGroup);
+
+        return {
+            mesh: group,
+            type: 'aerial',
+            isSpinner: true,
+            label: 'Frisbee Neon Melayang',
+            minY: 1.42,
+            maxY: 2.65
+        };
+    }
+
+    createBoneMesh(isSuper = false) {
+        const group = new THREE.Group();
+        const mat = isSuper ? this.superTreatMat : this.boneGoldMat;
+
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.72, 8), mat);
+        shaft.rotation.z = Math.PI / 2;
+        group.add(shaft);
+
+        [-0.35, 0.35].forEach((x) => {
+            [-0.12, 0.12].forEach((y) => {
+                const knob = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), mat);
+                knob.position.set(x, y, 0);
+                group.add(knob);
+            });
+        });
+
+        if (isSuper) {
+            const halo = new THREE.Mesh(
+                new THREE.TorusGeometry(0.62, 0.06, 8, 20),
+                new THREE.MeshBasicMaterial({ color: 0xfef08a })
+            );
+            group.add(halo);
+            group.scale.set(1.25, 1.25, 1.25);
+        }
+
+        return group;
+    }
+
+    buildObstacleByRoll(currentScore) {
+        const roll = Math.random();
+        if (currentScore > 60 && roll < 0.22) {
+            return this.createOverheadGate();
+        } else if (currentScore > 100 && roll < 0.36) {
+            return this.createAerialFrisbee();
+        } else if (roll < 0.58) {
+            return this.createHydrant();
+        } else if (roll < 0.80) {
+            return this.createCactus();
+        } else {
+            return this.createBench();
+        }
+    }
+
+    spawnPattern(gameSpeed, currentScore) {
+        const spawnZ = -135;
+
+        // Choose how many lanes have obstacles in this row (1 or 2 lanes, or 3 jumpable/duckable)
+        const patternRoll = Math.random();
+        const laneIndices = [0, 1, 2].sort(() => Math.random() - 0.5);
+        const numObstacles = patternRoll < 0.45 ? 1 : (patternRoll < 0.88 ? 2 : 3);
+
+        const usedLanes = laneIndices.slice(0, numObstacles);
+
+        usedLanes.forEach((laneIdx) => {
+            const obsData = this.buildObstacleByRoll(currentScore);
+            obsData.lane = laneIdx;
+            obsData.mesh.position.set(LANES[laneIdx], 0, spawnZ);
+            this.scene.add(obsData.mesh);
+            this.obstacles.push(obsData);
+        });
+
+        // Spawn a line of Golden Bones or a Super Treat in one of the lanes leading up to the obstacle
+        const boneLane = laneIndices[laneIndices.length - 1];
+        const isSuper = Math.random() < 0.14 && currentScore > 120;
+
+        if (isSuper) {
+            const mesh = this.createBoneMesh(true);
+            mesh.position.set(LANES[boneLane], 1.4, spawnZ - 6);
+            this.scene.add(mesh);
+            this.collectibles.push({ mesh, lane: boneLane, isSuper: true, baseY: 1.4 });
+        } else {
+            for (let i = 0; i < 4; i++) {
+                const mesh = this.createBoneMesh(false);
+                mesh.position.set(LANES[boneLane], 1.0, spawnZ + 12 - i * 4.2);
+                this.scene.add(mesh);
+                this.collectibles.push({ mesh, lane: boneLane, isSuper: false, baseY: 1.0 });
+            }
+        }
+    }
+
+    spawnParticles(x, y, z, colorHex, count = 12, speed = 6) {
+        const geo = new THREE.SphereGeometry(0.14, 6, 6);
+        const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+        for (let i = 0; i < count; i++) {
+            const p = new THREE.Mesh(geo, mat);
+            p.position.set(x, y, z);
+            const angle = Math.random() * Math.PI * 2;
+            const vx = Math.cos(angle) * speed * 0.55;
+            const vy = Math.random() * speed * 0.9 + 1.5;
+            const vz = Math.sin(angle) * speed * 0.55 + 2.5;
+            this.scene.add(p);
+            this.particles.push({ mesh: p, vx, vy, vz, life: 0.55 });
+        }
+    }
+
+    reset() {
+        this.obstacles.forEach(o => this.scene.remove(o.mesh));
+        this.collectibles.forEach(c => this.scene.remove(c.mesh));
+        this.particles.forEach(p => this.scene.remove(p.mesh));
+        this.obstacles = [];
+        this.collectibles = [];
+        this.particles = [];
+        this.spawnTimer = 0.6;
+    }
+
+    update(dt, gameSpeed, currentScore, totalTime) {
+        // 1. Move Road Lane Dashes toward camera (+Z)
+        this.laneDashes.forEach(dash => {
+            dash.position.z += gameSpeed * dt;
+            if (dash.position.z > 15) {
+                dash.position.z -= 28 * 6.5;
+            }
+        });
+
+        // 2. Move Side Scenery (Trees & Lamps) toward camera (+Z)
+        this.scenery.forEach(item => {
+            item.mesh.position.z += gameSpeed * item.speedFactor * dt;
+            if (item.mesh.position.z > 16) {
+                item.mesh.position.z -= item.wrapZ;
+            }
+        });
+
+        // 3. Drift Clouds toward camera (+Z)
+        this.clouds.forEach(cloud => {
+            cloud.position.z += (gameSpeed * 0.25 + 1.5) * dt;
+            if (cloud.position.z > 20) {
+                cloud.position.z = -165;
+            }
+        });
+
+        // 4. Spawn New Obstacle Rows ahead at -Z
+        this.spawnTimer -= dt;
+        if (this.spawnTimer <= 0) {
+            this.spawnPattern(gameSpeed, currentScore);
+            const minGapTime = Math.max(0.62, 1.38 - (gameSpeed - 24) * 0.018);
+            this.spawnTimer = minGapTime + Math.random() * 0.45;
+        }
+
+        // 5. Move Obstacles toward player (+Z)
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            obs.mesh.position.z += gameSpeed * dt;
+
+            if (obs.isSpinner) {
+                const spinner = obs.mesh.getObjectByName('spinner');
+                if (spinner) {
+                    spinner.rotation.y += dt * 10;
+                    spinner.position.y = 1.92 + Math.sin(totalTime * 6 + i) * 0.1;
+                }
+            }
+
+            if (obs.mesh.position.z > 14) {
+                this.scene.remove(obs.mesh);
+                this.obstacles.splice(i, 1);
+            }
+        }
+
+        // 6. Move Collectibles toward player (+Z)
+        for (let i = this.collectibles.length - 1; i >= 0; i--) {
+            const col = this.collectibles[i];
+            col.mesh.position.z += gameSpeed * dt;
+            col.mesh.rotation.y += dt * 3.8;
+            col.mesh.position.y = col.baseY + Math.sin(totalTime * 5 + i) * 0.16;
+
+            if (col.mesh.position.z > 14) {
+                this.scene.remove(col.mesh);
+                this.collectibles.splice(i, 1);
+            }
+        }
+
+        // 7. Update Particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.life -= dt;
+            p.vy -= 18 * dt;
+            p.mesh.position.x += p.vx * dt;
+            p.mesh.position.y += p.vy * dt;
+            p.mesh.position.z += p.vz * dt;
+            p.mesh.scale.setScalar(Math.max(0.01, p.life * 1.8));
+
+            if (p.life <= 0) {
+                this.scene.remove(p.mesh);
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------
+// 5. MAIN GAME ENGINE & REAR CAMERA CONTROLLER
+// ----------------------------------------------------------------------------
+class PoodleRunGame {
+    constructor() {
+        this.mount = document.getElementById('canvas-mount');
+        this.state = 'MENU'; // MENU, PLAYING, GAMEOVER
+        this.score = 0;
+        this.highScore = parseInt(localStorage.getItem('poodle_run_3d_highscore') || '0', 10);
+        this.bonesCollected = 0;
+        this.lastMilestone = 0;
+
+        this.baseSpeed = 25.0;
+        this.gameSpeed = this.baseSpeed;
+        this.maxSpeed = 52.0;
+        this.totalTime = 0;
+        this.dustTimer = 0;
+
+        this.invincibleTimer = 0;
+        this.themeIndex = 0;
+
+        // Strictly Rear Chase Camera Modes (All directly behind the Poodle looking forward to -Z!)
+        this.cameraMode = 0;
+        this.cameraModes = [
+            { name: 'Belakang Standar', pos: new THREE.Vector3(0, 4.3, 7.6), look: new THREE.Vector3(0, 1.5, -24) },
+            { name: 'Belakang Dekat', pos: new THREE.Vector3(0, 3.1, 5.5), look: new THREE.Vector3(0, 1.4, -22) },
+            { name: 'Belakang Tinggi', pos: new THREE.Vector3(0, 6.2, 9.6), look: new THREE.Vector3(0, 1.2, -28) }
+        ];
+
+        this.isDragging = false;
+        this.dragStart = { x: 0, y: 0 };
+        this.orbitOffset = { yaw: 0, pitch: 0 };
+
+        this.initThree();
+        this.poodle = new PoodleCharacter(this.scene);
+        this.world = new WorldSpawner(this.scene);
+
+        this.bindEvents();
+        this.updateHUD();
+        this.clock = new THREE.Clock();
+    }
+
+    initThree() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(TIME_THEMES[0].skyHex);
+        this.scene.fog = new THREE.FogExp2(TIME_THEMES[0].fogHex, 0.011);
+
+        this.camera = new THREE.PerspectiveCamera(54, w / h, 0.1, 220);
+        this.camera.position.copy(this.cameraModes[0].pos);
+        this.camera.lookAt(this.cameraModes[0].look);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        this.renderer.setSize(w, h);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.mount.appendChild(this.renderer.domElement);
+
+        // Lights
+        this.ambientLight = new THREE.AmbientLight(TIME_THEMES[0].ambientHex, TIME_THEMES[0].ambientIntensity);
+        this.scene.add(this.ambientLight);
+
+        this.dirLight = new THREE.DirectionalLight(TIME_THEMES[0].dirHex, TIME_THEMES[0].dirIntensity);
+        this.dirLight.position.set(16, 32, 22);
+        this.dirLight.castShadow = true;
+        this.dirLight.shadow.mapSize.width = 1024;
+        this.dirLight.shadow.mapSize.height = 1024;
+        this.dirLight.shadow.camera.near = 1;
+        this.dirLight.shadow.camera.far = 110;
+        const d = 26;
+        this.dirLight.shadow.camera.left = -d;
+        this.dirLight.shadow.camera.right = d;
+        this.dirLight.shadow.camera.top = d;
+        this.dirLight.shadow.camera.bottom = -d;
+        this.scene.add(this.dirLight);
+
+        // Ground Grass & 3-Lane Boulevard Track extending into the Horizon (-Z)
+        const grassGeo = new THREE.PlaneGeometry(220, 260);
+        grassGeo.rotateX(-Math.PI / 2);
+        this.grassMat = new THREE.MeshStandardMaterial({ color: TIME_THEMES[0].groundHex, roughness: 0.9 });
+        const grass = new THREE.Mesh(grassGeo, this.grassMat);
+        grass.position.set(0, -0.05, -90);
+        grass.receiveShadow = true;
+        this.scene.add(grass);
+
+        const roadGeo = new THREE.PlaneGeometry(8.6, 260);
+        roadGeo.rotateX(-Math.PI / 2);
+        this.roadMat = new THREE.MeshStandardMaterial({ color: TIME_THEMES[0].roadHex, roughness: 0.8 });
+        const road = new THREE.Mesh(roadGeo, this.roadMat);
+        road.position.set(0, 0, -90);
+        road.receiveShadow = true;
+        this.scene.add(road);
+
+        // Sidewalk Curbs along the 3-lane track
+        const curbGeo = new THREE.BoxGeometry(0.45, 0.18, 260);
+        const curbMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.6 });
+        [-4.4, 4.4].forEach((xPos) => {
+            const curb = new THREE.Mesh(curbGeo, curbMat);
+            curb.position.set(xPos, 0.08, -90);
+            curb.receiveShadow = true;
+            this.scene.add(curb);
+        });
+
+        // Distant Horizon Mountains at z = -175
+        const mtnMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85 });
+        const snowMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+        for (let i = 0; i < 9; i++) {
+            const mtnGroup = new THREE.Group();
+            const mh = 18 + Math.random() * 14;
+            const mr = 12 + Math.random() * 6;
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(mr, mh, 6), mtnMat);
+            cone.position.y = mh / 2 - 1;
+            mtnGroup.add(cone);
+
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(mr * 0.36, mh * 0.36, 6), snowMat);
+            cap.position.y = mh * 0.82 - 1;
+            mtnGroup.add(cap);
+
+            mtnGroup.position.set(-70 + i * 18, 0, -170 - Math.random() * 15);
+            this.scene.add(mtnGroup);
+        }
+
+        // Night Stars Dome in Horizon Sky
+        const starGeo = new THREE.BufferGeometry();
+        const starPositions = [];
+        for (let i = 0; i < 240; i++) {
+            starPositions.push(
+                (Math.random() - 0.5) * 180,
+                12 + Math.random() * 55,
+                -40 - Math.random() * 140
+            );
+        }
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        this.starMat = new THREE.PointsMaterial({
+            color: 0xfef08a,
+            size: 0.55,
+            transparent: true,
+            opacity: 0
+        });
+        this.stars = new THREE.Points(starGeo, this.starMat);
+        this.scene.add(this.stars);
+    }
+
+    bindEvents() {
+        window.addEventListener('resize', () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            this.camera.aspect = w / h;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(w, h);
+        });
+
+        // Keyboard Controls (3-Lane Left/Right + Jump/Duck)
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                e.preventDefault();
+                if (this.state === 'MENU' || this.state === 'GAMEOVER') {
+                    this.startGame();
+                } else if (this.state === 'PLAYING') {
+                    this.triggerJump();
+                }
+            } else if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+                e.preventDefault();
+                if (this.state === 'PLAYING') {
+                    this.poodle.changeLane(-1);
+                }
+            } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+                e.preventDefault();
+                if (this.state === 'PLAYING') {
+                    this.poodle.changeLane(1);
+                }
+            } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                e.preventDefault();
+                if (this.state === 'PLAYING') {
+                    this.poodle.setDuck(true);
+                    document.getElementById('btn-duck').classList.add('active-press');
+                }
+            } else if (e.code === 'KeyC') {
+                this.cycleCameraMode();
+            } else if (e.code === 'KeyM') {
+                this.toggleSound();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+                this.poodle.setDuck(false);
+                document.getElementById('btn-duck').classList.remove('active-press');
+            }
+        });
+
+        // On-Screen UI Buttons
+        document.getElementById('btn-start').addEventListener('click', () => this.startGame());
+        document.getElementById('btn-restart').addEventListener('click', () => this.startGame());
+        document.getElementById('btn-camera').addEventListener('click', () => this.cycleCameraMode());
+        document.getElementById('btn-sound').addEventListener('click', () => this.toggleSound());
+
+        document.getElementById('btn-left').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (this.state === 'PLAYING') this.poodle.changeLane(-1);
+        });
+        document.getElementById('btn-right').addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (this.state === 'PLAYING') this.poodle.changeLane(1);
+        });
+
+        const btnJump = document.getElementById('btn-jump');
+        const btnDuck = document.getElementById('btn-duck');
+
+        btnJump.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (this.state !== 'PLAYING') {
+                this.startGame();
+            } else {
+                this.triggerJump();
+            }
+        });
+
+        btnDuck.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            if (this.state === 'PLAYING') this.poodle.setDuck(true);
+        });
+        const releaseDuck = () => this.poodle.setDuck(false);
+        btnDuck.addEventListener('pointerup', releaseDuck);
+        btnDuck.addEventListener('pointerleave', releaseDuck);
+
+        // Coat Color Swatches
+        const swatchButtons = document.querySelectorAll('[data-coat]');
+        swatchButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const coatKey = btn.getAttribute('data-coat');
+                this.poodle.setCoatColor(coatKey);
+                swatchButtons.forEach(b => {
+                    b.classList.toggle('selected', b.getAttribute('data-coat') === coatKey);
+                });
+                const nameEl = document.getElementById('coat-name-display');
+                if (nameEl && COAT_PRESETS[coatKey]) {
+                    nameEl.textContent = COAT_PRESETS[coatKey].name;
+                }
+                sound.playBoneCollect();
+            });
+        });
+
+        // Subtle Mouse Drag Look & Touch Swipe Gestures (Left, Right, Up, Down)
+        const canvas = this.renderer.domElement;
+        canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.dragStart = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+            const dx = e.clientX - this.dragStart.x;
+            const dy = e.clientY - this.dragStart.y;
+            this.dragStart = { x: e.clientX, y: e.clientY };
+            this.orbitOffset.yaw = THREE.MathUtils.clamp(this.orbitOffset.yaw - dx * 0.005, -0.45, 0.45);
+            this.orbitOffset.pitch = THREE.MathUtils.clamp(this.orbitOffset.pitch + dy * 0.004, -0.2, 0.35);
+        });
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+        });
+
+        // 4-Directional Touch Swipe for Mobile
+        let touchStart = null;
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!touchStart || this.state !== 'PLAYING') return;
+            const dx = e.touches[0].clientX - touchStart.x;
+            const dy = e.touches[0].clientY - touchStart.y;
+
+            if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    this.poodle.changeLane(dx > 0 ? 1 : -1);
+                } else {
+                    if (dy < 0) {
+                        this.triggerJump();
+                    } else {
+                        this.poodle.setDuck(true);
+                        setTimeout(() => this.poodle.setDuck(false), 550);
+                    }
+                }
+                touchStart = null;
+            }
+        }, { passive: true });
+    }
+
+    triggerJump() {
+        const res = this.poodle.jump();
+        if (res.jumped) {
+            this.world.spawnParticles(
+                this.poodle.x,
+                this.poodle.y + 0.2,
+                0,
+                res.isDouble ? 0x38bdf8 : 0xf8fafc,
+                res.isDouble ? 14 : 8,
+                5
+            );
+            if (res.isDouble) {
+                this.showFloatingPopup('LOMPAT GANDA!', '#38bdf8');
+            }
+        }
+    }
+
+    cycleCameraMode() {
+        this.cameraMode = (this.cameraMode + 1) % this.cameraModes.length;
+        this.orbitOffset = { yaw: 0, pitch: 0 };
+        document.getElementById('camera-label').textContent = this.cameraModes[this.cameraMode].name;
+    }
+
+    toggleSound() {
+        const muted = sound.toggleMute();
+        const icon = document.getElementById('sound-icon');
+        icon.className = muted ? 'fa-solid fa-volume-xmark text-rose-400' : 'fa-solid fa-volume-high text-amber-400';
+    }
+
+    showFloatingPopup(text, color = '#fbbf24') {
+        const layer = document.getElementById('popup-layer');
+        const el = document.createElement('div');
+        el.className = 'score-popup text-sm sm:text-base px-3 py-1 rounded-full bg-slate-900/80 border border-white/20';
+        el.style.left = '50%';
+        el.style.top = '38%';
+        el.style.color = color;
+        el.textContent = text;
+        layer.appendChild(el);
+        setTimeout(() => el.remove(), 950);
+    }
+
+    startGame() {
+        sound.init();
+        this.state = 'PLAYING';
+        this.score = 0;
+        this.bonesCollected = 0;
+        this.lastMilestone = 0;
+        this.gameSpeed = this.baseSpeed;
+        this.invincibleTimer = 0;
+        this.themeIndex = 0;
+
+        this.poodle.reset();
+        this.world.reset();
+
+        document.getElementById('start-modal').classList.add('hidden');
+        document.getElementById('gameover-modal').classList.add('hidden');
+        document.getElementById('powerup-banner').classList.add('hidden');
+        this.updateHUD();
+        sound.playJump(false);
+    }
+
+    endGame(obstacleLabel) {
+        this.state = 'GAMEOVER';
+        sound.playGameOver();
+        this.world.spawnParticles(this.poodle.x, this.poodle.y + 1.0, 0, 0xf43f5e, 24, 9);
+
+        const finalScoreInt = Math.floor(this.score);
+        const isNewRecord = finalScoreInt > this.highScore;
+        if (isNewRecord) {
+            this.highScore = finalScoreInt;
+            localStorage.setItem('poodle_run_3d_highscore', String(this.highScore));
+        }
+
+        document.getElementById('gameover-reason').textContent = `Poodle menabrak ${obstacleLabel}!`;
+        document.getElementById('final-score').textContent = String(finalScoreInt);
+        document.getElementById('final-bones').textContent = String(this.bonesCollected);
+        document.getElementById('final-best').textContent = String(this.highScore);
+        document.getElementById('new-record-badge').classList.toggle('hidden', !isNewRecord);
+        document.getElementById('powerup-banner').classList.add('hidden');
+
+        this.updateHUD();
+        document.getElementById('gameover-modal').classList.remove('hidden');
+    }
+
+    updateHUD() {
+        const s = Math.floor(this.score);
+        document.getElementById('hud-score').textContent = String(s).padStart(5, '0');
+        document.getElementById('hud-highscore').textContent = String(this.highScore).padStart(5, '0');
+        document.getElementById('hud-bones').textContent = String(this.bonesCollected);
+
+        const mult = (this.gameSpeed / this.baseSpeed).toFixed(1);
+        document.getElementById('speed-badge').textContent = `${mult}x`;
+    }
+
+    updateDayNightCycle(dt) {
+        const targetIndex = Math.floor(this.score / 500) % TIME_THEMES.length;
+        if (targetIndex !== this.themeIndex) {
+            this.themeIndex = targetIndex;
+            const theme = TIME_THEMES[this.themeIndex];
+            const badge = document.getElementById('time-badge');
+            badge.className = `flex items-center gap-1 font-semibold ${theme.colorClass}`;
+            badge.innerHTML = `<i class="fa-solid ${theme.icon}"></i> ${theme.name}`;
+        }
+
+        const theme = TIME_THEMES[this.themeIndex];
+        const lerpRate = dt * 1.8;
+
+        this.scene.background.lerp(new THREE.Color(theme.skyHex), lerpRate);
+        this.scene.fog.color.lerp(new THREE.Color(theme.fogHex), lerpRate);
+        this.ambientLight.color.lerp(new THREE.Color(theme.ambientHex), lerpRate);
+        this.ambientLight.intensity = THREE.MathUtils.lerp(this.ambientLight.intensity, theme.ambientIntensity, lerpRate);
+        this.dirLight.color.lerp(new THREE.Color(theme.dirHex), lerpRate);
+        this.dirLight.intensity = THREE.MathUtils.lerp(this.dirLight.intensity, theme.dirIntensity, lerpRate);
+        this.grassMat.color.lerp(new THREE.Color(theme.groundHex), lerpRate);
+        this.roadMat.color.lerp(new THREE.Color(theme.roadHex), lerpRate);
+        this.starMat.opacity = THREE.MathUtils.lerp(this.starMat.opacity, theme.starOpacity, lerpRate);
+    }
+
+    updateCamera(dt) {
+        // Strictly behind-the-back 3D chase camera that follows the Poodle's lane & jump
+        const mode = this.cameraModes[this.cameraMode];
+        const targetPos = mode.pos.clone();
+
+        targetPos.x = this.poodle.x * 0.68 + Math.sin(this.orbitOffset.yaw) * 3.0;
+        targetPos.y = Math.max(1.8, mode.pos.y + this.poodle.y * 0.25 + this.orbitOffset.pitch * 3.5);
+
+        this.camera.position.lerp(targetPos, dt * 8.0);
+
+        const lookTarget = mode.look.clone();
+        lookTarget.x = this.poodle.x * 0.35;
+        lookTarget.y = mode.look.y + this.poodle.y * 0.2;
+        this.camera.lookAt(lookTarget);
+    }
+
+    checkCollisions() {
+        const pBox = this.poodle.getHitbox();
+
+        // 1. Check Collectibles (Golden Bones & Super Treats)
+        for (let i = this.world.collectibles.length - 1; i >= 0; i--) {
+            const col = this.world.collectibles[i];
+            const cx = col.mesh.position.x;
+            const cy = col.mesh.position.y;
+            const cz = col.mesh.position.z;
+
+            if (Math.abs(cx - pBox.x) < 1.05 &&
+                Math.abs(cz) < 1.25 &&
+                cy > pBox.minY - 0.85 && cy < pBox.maxY + 0.85) {
+
+                if (col.isSuper) {
+                    this.invincibleTimer = 6.5;
+                    this.score += 100;
+                    sound.playPowerup();
+                    this.world.spawnParticles(cx, cy, cz, 0xec4899, 20, 8);
+                    this.showFloatingPopup('BISKUIT SUPER! +100', '#f472b6');
+                    document.getElementById('powerup-banner').classList.remove('hidden');
+                } else {
+                    this.bonesCollected++;
+                    this.score += 50;
+                    sound.playBoneCollect();
+                    this.world.spawnParticles(cx, cy, cz, 0xfbbf24, 12, 6);
+                    this.showFloatingPopup('+50 TULANG EMAS!', '#fbbf24');
+                }
+
+                this.scene.remove(col.mesh);
+                this.world.collectibles.splice(i, 1);
+            }
+        }
+
+        // 2. Check 3-Lane Obstacles
+        for (let i = this.world.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.world.obstacles[i];
+            const ox = obs.mesh.position.x;
+            const oz = obs.mesh.position.z;
+
+            const overlapX = Math.abs(ox - pBox.x) < 0.95;
+            const overlapZ = oz > -0.88 && oz < 0.88;
+            const overlapY = (obs.minY < pBox.maxY) && (obs.maxY > pBox.minY);
+
+            if (overlapX && overlapZ && overlapY) {
+                if (this.invincibleTimer > 0) {
+                    sound.playSmash();
+                    this.score += 30;
+                    this.world.spawnParticles(ox, 1.2, oz, 0x38bdf8, 18, 9);
+                    this.showFloatingPopup('HANCUR! +30', '#38bdf8');
+                    this.scene.remove(obs.mesh);
+                    this.world.obstacles.splice(i, 1);
+                } else {
+                    this.endGame(obs.label);
+                    break;
+                }
+            }
+        }
+    }
+
+    update() {
+        const dt = Math.min(this.clock.getDelta(), 0.1);
+        this.totalTime += dt;
+
+        if (this.state === 'PLAYING') {
+            this.gameSpeed = Math.min(this.maxSpeed, this.gameSpeed + dt * 0.45);
+            const effectiveSpeed = this.invincibleTimer > 0 ? this.gameSpeed * 1.18 : this.gameSpeed;
+
+            this.score += dt * (effectiveSpeed * 0.72);
+
+            const currentHundred = Math.floor(this.score / 100);
+            if (currentHundred > this.lastMilestone && currentHundred > 0) {
+                this.lastMilestone = currentHundred;
+                sound.playMilestone();
+            }
+
+            if (this.invincibleTimer > 0) {
+                this.invincibleTimer -= dt;
+                document.getElementById('powerup-timer').textContent = `${Math.max(0, this.invincibleTimer).toFixed(1)}s`;
+                if (this.invincibleTimer <= 0) {
+                    document.getElementById('powerup-banner').classList.add('hidden');
+                    const selectedSwatch = document.querySelector('.swatch-btn.selected');
+                    const coatKey = selectedSwatch ? selectedSwatch.getAttribute('data-coat') : 'white';
+                    this.poodle.setCoatColor(coatKey);
+                }
+            }
+
+            const { justLanded } = this.poodle.update(dt, effectiveSpeed, this.invincibleTimer > 0, this.totalTime);
+            if (justLanded) {
+                this.world.spawnParticles(this.poodle.x, 0.15, 0, 0xe2e8f0, 8, 4);
+            }
+
+            this.dustTimer -= dt;
+            if (this.poodle.y <= 0.02 && this.dustTimer <= 0) {
+                this.world.spawnParticles(this.poodle.x + (Math.random() - 0.5) * 0.5, 0.12, 0.7, 0xffffff, 1, 2);
+                this.dustTimer = 0.11;
+            }
+
+            this.world.update(dt, effectiveSpeed, this.score, this.totalTime);
+            this.checkCollisions();
+            this.updateDayNightCycle(dt);
+            this.updateHUD();
+        } else if (this.state === 'MENU') {
+            this.poodle.update(dt, 16, false, this.totalTime);
+            this.world.laneDashes.forEach(dash => {
+                dash.position.z += 12 * dt;
+                if (dash.position.z > 15) dash.position.z -= 28 * 6.5;
+            });
+        }
+
+        this.updateCamera(dt);
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+window.onload = function () {
+    const game = new PoodleRunGame();
+    function animateLoop() {
+        requestAnimationFrame(animateLoop);
+        game.update();
+    }
+    animateLoop();
+};
+</script>
+</body>
+</html>
