@@ -2538,6 +2538,9 @@
     // PROTEKSI SANDI PENGGUNA DENGAN SHA-256 (TIDAK ADA PLAINTEXT DI GITHUB)
     // & PEMBANGKIT OTOMATIS TOKEN BRANKAS SAAT USER LOGIN BENAR
     // ====================================================================
+    const DEFAULT_GAS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxG_GCcILWQMpsEcqW7MgEM0bdYemGGJN-SeVPJaYaCGPDDp4aA9fOY3UtBD7Ltc1lL/exec';
+    const DEFAULT_GAS_SECRET_TOKEN = 'SSF-RAHASIA-2026';
+
     async function sha256Hex(plainText) {
       const encoder = new TextEncoder();
       const data = encoder.encode(String(plainText));
@@ -2546,35 +2549,43 @@
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    // Fungsi pembangkit Token Rahasia Brankas Otomatis (Hanya aktif jika user terautentikasi)
+    // Fungsi pembangkit Token Rahasia Brankas Otomatis (Menggunakan kode rahasia resmi SSF-RAHASIA-2026)
     async function deriveAutoVaultSecretToken() {
-      const masterSeed = ['SSF', 'VAULT', 'BULELENG', 'PEMARON', '2026', 'AUTH_VERIFIED'].join('::');
-      const digest = await sha256Hex(masterSeed);
-      return 'SSF-AUTO-' + digest.slice(0, 24).toUpperCase();
+      return DEFAULT_GAS_SECRET_TOKEN;
     }
 
-    // Aktifkan dan isi otomatis Token Rahasia Brankas begitu user berhasil login
+    // Aktifkan dan isi otomatis URL Google Script & Token Rahasia Brankas begitu user berhasil login
     async function autoUnlockGasVaultForAuthenticatedUser(triggerCloudFetch = true) {
       try {
-        const autoToken = await deriveAutoVaultSecretToken();
-        if (!savedGasSecretToken || savedGasSecretToken.startsWith('SSF-AUTO-')) {
-          savedGasSecretToken = autoToken;
-          localStorage.setItem(KEY_GAS_TOKEN, JSON.stringify(autoToken));
+        if (!savedWebhookUrl) {
+          savedWebhookUrl = DEFAULT_GAS_WEBHOOK_URL;
         }
+        if (!savedGasSecretToken || savedGasSecretToken.startsWith('SSF-AUTO-')) {
+          savedGasSecretToken = DEFAULT_GAS_SECRET_TOKEN;
+        }
+        localStorage.setItem(KEY_WEBHOOK, JSON.stringify(savedWebhookUrl));
+        localStorage.setItem(KEY_GAS_TOKEN, JSON.stringify(savedGasSecretToken));
+
+        const webhookInput = document.getElementById('sheetWebhookUrl');
+        if (webhookInput) webhookInput.value = savedWebhookUrl;
         const tokenInput = document.getElementById('gasVaultSecretToken');
         if (tokenInput) tokenInput.value = savedGasSecretToken;
+        const loginUrlIn = document.getElementById('loginGasUrlInput');
+        if (loginUrlIn) loginUrlIn.value = savedWebhookUrl;
         const loginTokIn = document.getElementById('loginGasTokenInput');
         if (loginTokIn) loginTokIn.value = savedGasSecretToken;
 
-        // Jika URL Google Script sudah terpasang, otomatis tarik API Firebase & buka brankas
-        const activeUrl = savedWebhookUrl || getStored(KEY_WEBHOOK, '');
-        if (triggerCloudFetch && activeUrl) {
+        // Otomatis tarik API Firebase dari Brankas Google Script & muat seluruh data database
+        if (triggerCloudFetch && savedWebhookUrl) {
           await fetchFirebaseConfigFromGasVault(false);
+          if (typeof window.pullAllMultiYearPartitions === 'function') {
+            await window.pullAllMultiYearPartitions(false);
+          }
         }
         return savedGasSecretToken;
       } catch (e) {
         console.warn('Auto-unlock vault token warning:', e);
-        return '';
+        return DEFAULT_GAS_SECRET_TOKEN;
       }
     }
 
@@ -2710,8 +2721,15 @@
     let customQrisUrl = getStored(KEY_QRIS, DEFAULT_QRIS);
     let customQrisPayload = getStored(KEY_QRIS_PAYLOAD, '');
     let settlingBonTargetId = null;
-    let savedWebhookUrl = getStored(KEY_WEBHOOK, '');
-    let savedGasSecretToken = getStored(KEY_GAS_TOKEN, '');
+    let savedWebhookUrl = getStored(KEY_WEBHOOK, '') || DEFAULT_GAS_WEBHOOK_URL;
+    let savedGasSecretToken = getStored(KEY_GAS_TOKEN, '') || DEFAULT_GAS_SECRET_TOKEN;
+    if (savedGasSecretToken.startsWith('SSF-AUTO-')) {
+      savedGasSecretToken = DEFAULT_GAS_SECRET_TOKEN;
+    }
+    try {
+      localStorage.setItem(KEY_WEBHOOK, JSON.stringify(savedWebhookUrl));
+      localStorage.setItem(KEY_GAS_TOKEN, JSON.stringify(savedGasSecretToken));
+    } catch (e) {}
     let firebaseConfig = getStored(KEY_FIREBASE, OFFICIAL_FIREBASE_CONFIG);
 
     // Chart.js Global Instances
