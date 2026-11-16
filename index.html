@@ -3723,6 +3723,112 @@ Matur Suksma!`;
         const filterCashier = resolvedFilterName.replace(/[^a-zA-Z0-9]/g, '_');
         XLSX.writeFile(wb, `Laporan_Kasir_${filterCashier}_${startDate}_sd_${endDate}.xlsx`);
         showToast('Laporan penjualan kasir berhasil diekspor ke Excel!', 'success');
+      } catch (err) {
+        showToast('Gagal ekspor laporan: ' + err.message, 'error');
+      }
+    }
+
+    // ==========================================
+    // POS CATALOG & CART OPERATIONS
+    // ==========================================
+    function setPosCategory(cat) {
+      currentPosCategory = cat;
+      document.querySelectorAll('.pos-cat-btn').forEach(btn => {
+        if (btn.getAttribute('data-cat') === cat) {
+          btn.className = 'pos-cat-btn active px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 text-white';
+        } else {
+          btn.className = 'pos-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white';
+        }
+      });
+      renderPosCatalog();
+    }
+
+    function renderPosCatalog() {
+      const grid = document.getElementById('posProductGrid');
+      if (!grid) return;
+
+      const search = (document.getElementById('posSearchInput')?.value || '').toLowerCase().trim();
+      const filtered = products.filter(p => {
+        const matchesCat = currentPosCategory === 'ALL' || p.category === currentPosCategory;
+        const matchesSearch = !search || 
+          p.name.toLowerCase().includes(search) || 
+          (p.barcode && p.barcode.toLowerCase().includes(search));
+        return matchesCat && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-500">
+            <i data-lucide="package-search" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+            <p class="text-xs">Tidak ada barang yang cocok dengan pencarian.</p>
+          </div>
+        `;
+        try { lucide.createIcons(); } catch (e) {}
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => `
+        <div onclick="addToCart('${p.id}')" class="bg-slate-900 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-3 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] shadow-sm group">
+          <div class="w-full h-28 rounded-xl bg-slate-950 overflow-hidden mb-2 relative">
+            <img src="${p.img || 'https://placehold.co/200x200/0f172a/34d399?text=Barang'}" alt="${p.name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform">
+            <span class="absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold ${p.stock <= 5 ? 'bg-rose-500/90 text-white' : 'bg-slate-900/80 text-emerald-400 backdrop-blur-sm'}">
+              Stok: ${p.stock}
+            </span>
+          </div>
+          <div>
+            <h4 class="font-bold text-white text-xs line-clamp-1">${p.name}</h4>
+            <p class="text-[10px] text-slate-400 uppercase mt-0.5">${p.category}</p>
+          </div>
+          <div class="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/80">
+            <span class="text-xs font-black text-emerald-400 font-mono">${formatRupiah(p.price)}</span>
+            <button class="w-6 h-6 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      try { lucide.createIcons(); } catch (e) {}
+    }
+
+    let audioCtx = null;
+    function playCartBeep() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(1150, now);
+        gain1.gain.setValueAtTime(0.2, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.06);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1450, now + 0.08);
+        gain2.gain.setValueAtTime(0.22, now + 0.08);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start(now + 0.08);
+        osc2.stop(now + 0.16);
+      } catch (e) {
+        console.warn('AudioContext playback error:', e);
+      }
+    }
+
     function playItemNameVoice(itemName, onEndCallback = null) {
       if (!itemName) {
         if (typeof onEndCallback === 'function') onEndCallback();
